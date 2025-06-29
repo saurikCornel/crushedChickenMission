@@ -7,10 +7,35 @@ struct GameHolder: UIViewRepresentable {
     
     func makeUIView(context: Context) -> WKWebView {
         debugPrint("Creating WKWebView with URL: \(viewModel.url)")
+        
         let configuration = WKWebViewConfiguration()
+        
+        // КРИТИЧЕСКИ ВАЖНО: Настройки для сохранения куки
+        configuration.websiteDataStore = WKWebsiteDataStore.default()
+        configuration.processPool = WKProcessPool()
+        
+        // Настройки для медиа
+        configuration.allowsInlineMediaPlayback = true
+        configuration.mediaTypesRequiringUserActionForPlayback = []
+        
+        // Настройки JavaScript
+        if #available(iOS 14.0, *) {
+            let pagePrefs = WKWebpagePreferences()
+            pagePrefs.allowsContentJavaScript = true
+            configuration.defaultWebpagePreferences = pagePrefs
+        } else {
+            configuration.preferences.javaScriptEnabled = true
+        }
+        
         let webView = WKWebView(frame: .zero, configuration: configuration)
         webView.navigationDelegate = context.coordinator
-        viewModel.setWebView(webView)
+        
+        // Дополнительные настройки для сохранения состояния
+        webView.allowsBackForwardNavigationGestures = true
+        webView.allowsLinkPreview = false
+        
+        debugPrint("viewModel.url = \(viewModel.url)")
+        webView.load(URLRequest(url: viewModel.url))
         return webView
     }
     

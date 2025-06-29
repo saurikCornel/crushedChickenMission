@@ -1,38 +1,64 @@
 import Foundation
 import WebKit
+import SwiftUI
 
 class GameLoaderModel: ObservableObject {
     @Published var loadingState: HandlerLoading = .idle
     let url: URL
-    private var webView: WKWebView?
+    let webView: WKWebView
     private var progressObservation: NSKeyValueObservation?
     private var currentProgress: Double = 0.0
     
     init(url: URL) {
         self.url = url
+        
+        let configuration = WKWebViewConfiguration()
+        
+        // КРИТИЧЕСКИ ВАЖНО: Настройки для сохранения куки
+        configuration.websiteDataStore = WKWebsiteDataStore.default()
+        configuration.processPool = WKProcessPool()
+        
+        // Настройки для медиа
+        configuration.allowsInlineMediaPlayback = true
+        configuration.mediaTypesRequiringUserActionForPlayback = []
+        
+        // Настройки JavaScript
+        if #available(iOS 14.0, *) {
+            let pagePrefs = WKWebpagePreferences()
+            pagePrefs.allowsContentJavaScript = true
+            configuration.defaultWebpagePreferences = pagePrefs
+        } else {
+            configuration.preferences.javaScriptEnabled = true
+        }
+        
+        self.webView = WKWebView(frame: .zero, configuration: configuration)
+        
+        // Дополнительные настройки для сохранения состояния
+        webView.allowsBackForwardNavigationGestures = true
+        webView.allowsLinkPreview = false
+        
+        observeProgress(webView)
         debugPrint("WebViewModel initialized with URL: \(url)")
     }
     
-    func setWebView(_ webView: WKWebView) {
-        self.webView = webView
-        observeProgress(webView)
-        loadRequest()
-        debugPrint("WebView set in WebViewModel")
-    }
-    
     func loadRequest() {
-        guard let webView = webView else {
-            debugPrint("WebView is nil, cannot load yet")
+        guard url.scheme == "https" || url.scheme == "http" else {
+            debugPrint("Invalid URL scheme: \(url)")
+            DispatchQueue.main.async { [weak self] in
+                self?.loadingState = .idle
+            }
             return
         }
-        
         let request = URLRequest(url: url, timeoutInterval: 15.0)
         debugPrint("Loading request for URL: \(url)")
         DispatchQueue.main.async { [weak self] in
             self?.loadingState = .loading(progress: 0.0)
             self?.currentProgress = 0.0
+            debugPrint("[GameLoaderModel] Attempting to load. webView is nil?", false)
+            debugPrint("[GameLoaderModel] webView pointer:", String(describing: self?.webView))
+            debugPrint("[GameLoaderModel] Request URL:", request.url?.absoluteString ?? "nil")
+            self?.webView.load(request)
         }
-        webView.load(request)
     }
     
     private func observeProgress(_ webView: WKWebView) {
